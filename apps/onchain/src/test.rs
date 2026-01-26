@@ -332,7 +332,7 @@ fn test_too_many_milestones() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #6)")]
+#[should_panic(expected = "Error(Contract, #12)")]
 fn test_invalid_milestone_amount() {
     let env = Env::default();
     env.mock_all_auths();
@@ -353,6 +353,128 @@ fn test_invalid_milestone_amount() {
         },
     ];
 
-    // This should panic with Error #6 (InvalidMilestoneAmount)
+    // This should panic with Error #11 (ZeroAmount)
     client.create_escrow(&escrow_id, &depositor, &recipient, &milestones);
+}
+
+#[test]
+fn test_zero_amount_milestone_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let escrow_id = 1u64;
+
+    // Create milestones with one zero amount
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 0, // Invalid: zero amount
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Test"),
+        },
+    ];
+
+    // Attempt to create escrow with zero amount milestone
+    let result = client.try_create_escrow(&escrow_id, &depositor, &recipient, &milestones);
+
+    // Assert specific error is returned
+    assert_eq!(result, Err(Ok(Error::ZeroAmount)));
+}
+
+#[test]
+fn test_negative_amount_milestone_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let escrow_id = 2u64;
+
+    // Create milestones with negative amount
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: -1000, // Invalid: negative amount
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Test"),
+        },
+    ];
+
+    // Attempt to create escrow
+    let result = client.try_create_escrow(&escrow_id, &depositor, &recipient, &milestones);
+
+    // Assert ZeroAmount error (covers negative case)
+    assert_eq!(result, Err(Ok(Error::ZeroAmount)));
+}
+
+#[test]
+fn test_self_dealing_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let same_party = Address::generate(&env); // Same address for both
+    let escrow_id = 3u64;
+
+    // Create valid milestones
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 5000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Task"),
+        },
+    ];
+
+    // Attempt to create escrow where depositor == recipient
+    let result = client.try_create_escrow(&escrow_id, &same_party, &same_party, &milestones);
+
+    // Assert SelfDealing error
+    assert_eq!(result, Err(Ok(Error::SelfDealing)));
+}
+
+#[test]
+fn test_valid_escrow_creation_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let escrow_id = 4u64;
+
+    // Valid milestones with positive amounts
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 3000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Phase1"),
+        },
+        Milestone {
+            amount: 7000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Phase2"),
+        },
+    ];
+
+    // Create escrow - should succeed
+    let result = client.try_create_escrow(&escrow_id, &depositor, &recipient, &milestones);
+
+    // Assert success
+    assert!(result.is_ok());
+
+    // Verify escrow was created correctly
+    let escrow = client.get_escrow(&escrow_id);
+    assert_eq!(escrow.depositor, depositor);
+    assert_eq!(escrow.recipient, recipient);
+    assert_eq!(escrow.total_amount, 10000);
 }
