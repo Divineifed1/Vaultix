@@ -90,7 +90,7 @@ impl VaultixEscrow {
         let fee = fee_bps.unwrap_or(DEFAULT_FEE_BPS);
 
         // Validate fee is reasonable (max 100%)
-        if fee < 0 || fee > BPS_DENOMINATOR {
+        if !(0..=BPS_DENOMINATOR).contains(&fee) {
             return Err(Error::InvalidFeeConfiguration);
         }
 
@@ -125,7 +125,7 @@ impl VaultixEscrow {
 
         treasury.require_auth();
 
-        if new_fee_bps < 0 || new_fee_bps > BPS_DENOMINATOR {
+        if !(0..=BPS_DENOMINATOR).contains(&new_fee_bps) {
             return Err(Error::InvalidFeeConfiguration);
         }
 
@@ -315,6 +315,7 @@ impl VaultixEscrow {
             token_client.transfer(&env.current_contract_address(), &treasury, &fee);
 
             // Emit event for fee collection
+            #[allow(deprecated)]
             env.events().publish(
                 (symbol_short!("fee_coll"), escrow_id, milestone_index),
                 (fee, treasury.clone()),
@@ -335,6 +336,7 @@ impl VaultixEscrow {
         env.storage().persistent().set(&storage_key, &escrow);
 
         // Emit event for milestone release
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("released"), escrow_id, milestone_index),
             (payout, escrow.recipient.clone()),
