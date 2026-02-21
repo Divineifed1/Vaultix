@@ -72,6 +72,9 @@ export class Escrow {
   @Column({ type: 'datetime', nullable: true })
   expiresAt?: Date;
 
+  @Column({ type: 'datetime', nullable: true })
+  expirationNotifiedAt?: Date;
+
   @Column({ default: true })
   isActive: boolean;
 
